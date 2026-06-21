@@ -10,6 +10,8 @@
 #include<iomanip>
 #include<fstream>
 #include<iostream>
+#include<string>
+#include<nlohmann/json.hpp>
 using namespace std;
 
 class MD_FEC{
@@ -79,6 +81,7 @@ public:
 	double vpot_tot=0;
 	double ekin_tot=0;
 	double force_max;
+	bool use_thermostat=true;
 	
 	vector<PARTICLE> particle;
 	vector<vector<vector<int>>> header;  //tablica komorek do metody sortowania linked-cell
@@ -133,9 +136,67 @@ public:
 		}
 		// rozmieszczamy czastki w pudle losowo - pozniej  optymalizacja "simulated annealing"
 		init_particle_distribution();
-				
-		
+
+
 		return;
+	}
+
+
+/************************************************************************************
+ * inicjalizacja z pliku JSON (bez anealingu, bez losowego rozkladu)
+ ************************************************************************************/
+	void load_particles_from_json(const string& filename){
+		ifstream f(filename);
+		nlohmann::json j = nlohmann::json::parse(f);
+
+		N = j["num_of_atoms"].get<int>();
+		particle.resize(N);
+
+		for(auto& p : j["particles"]){
+			int idx = p["id"].get<int>();
+
+			string atom_type = p["atom_type"].get<string>();
+			particle[idx].type = (atom_type == "C") ? 1 : 0;
+
+			particle[idx].r_vec[0] = p["position"]["x"].get<double>() / data.length_unit;
+			particle[idx].r_vec[1] = p["position"]["y"].get<double>() / data.length_unit;
+			particle[idx].r_vec[2] = p["position"]["z"].get<double>() / data.length_unit;
+
+			particle[idx].v_vec[0] = p["velocity"]["x"].get<double>() / data.velocity_unit;
+			particle[idx].v_vec[1] = p["velocity"]["y"].get<double>() / data.velocity_unit;
+			particle[idx].v_vec[2] = p["velocity"]["z"].get<double>() / data.velocity_unit;
+		}
+	}
+
+	void init_from_json(const string& filename){
+		load_particles_from_json(filename);  // sets N and particle array
+
+		delta_cell_min = 0;
+		for(int i = 0; i < 2; i++)
+			delta_cell_min = max(delta_cell_min, data.D[i] + data.R[i]);
+
+		mx_cell = int(xmax / delta_cell_min);
+		my_cell = int(ymax / delta_cell_min);
+		mz_cell = int(zmax / delta_cell_min);
+		dx_cell = xmax / mx_cell;
+		dy_cell = ymax / my_cell;
+		dz_cell = zmax / mz_cell;
+
+		cout<<"================================================="<<endl;
+		cout<<"N = "<<setw(20)<<N<<endl;
+		cout<<"xmax = "<<setw(20)<<xmax<<endl;
+		cout<<"ymax = "<<setw(20)<<ymax<<endl;
+		cout<<"zmax = "<<setw(20)<<zmax<<endl;
+		cout<<"mx_cell = "<<setw(20)<<mx_cell<<endl;
+		cout<<"my_cell = "<<setw(20)<<my_cell<<endl;
+		cout<<"mz_cell = "<<setw(20)<<mz_cell<<endl;
+		cout<<"dx_cell = "<<setw(20)<<dx_cell<<endl;
+		cout<<"dy_cell = "<<setw(20)<<dy_cell<<endl;
+		cout<<"dz_cell = "<<setw(20)<<dz_cell<<endl;
+		cout<<"================================================="<<endl;
+
+		header.resize(mx_cell, vector<vector<int>>(my_cell, vector<int>(mz_cell)));
+		link.resize(N);
 	}
 	
 	
@@ -154,19 +215,18 @@ public:
 		double temp;
 		double ekin_1;
 		double temp_avg;
-		double temp_d=1500./data.temperature_unit;
 		int ksr;
+		double temp_d=1500./data.temperature_unit;
 		double gamma_temp;
 		int ile_print;
-		
+
 		//przed pierwszym wywolaniem verleta trzeba posortowac i policzyc sily
 		sort();
 		compute_forces();
 		compute_forces_barrier_grav();
-		
+
 		double t=0.;
-		
-				
+
 		ksr=0;
 		ekin_1=0.;
 		ile_print=0;
@@ -176,15 +236,12 @@ public:
 			
 			
 			ksr++;
-			ekin_1+=ekin_tot;  //compute_total_kinetic_energy();
+			ekin_1+=ekin_tot;
 			temp_avg=2./3.*ekin_1/N/ksr;
-			gamma_temp=sqrt(temp_d/temp_avg);
-			
-			
-			
+			if(use_thermostat) gamma_temp=sqrt(temp_d/temp_avg);
+
 			if(it%500==0){
-				ile_print++;
-				
+				if(use_thermostat) ile_print++;
 				double vmax=0.;
 				for(int i=0;i<N;i++){
 					double vx=particle[i].v_vec[0];	
@@ -214,21 +271,15 @@ public:
 				cout<<setw(12)<< force_max <<"\t";
 				cout<<endl;
 				write_positions_to_file("pos.dat");
-				
-				
-				//zmiana temperatury
-				if(ile_print>1 && ile_print<100){
+
+				if(use_thermostat && ile_print>1 && ile_print<100){
 					ekin_1=0;
 					ksr=0;
 					for(int i=0;i<N;i++){
-						for(int j=0;j<3;j++)	particle[i].v_vec[j]*=gamma_temp;
+						for(int j=0;j<3;j++) particle[i].v_vec[j]*=gamma_temp;
 					}
 					cout<<ile_print<<"\t"<< temp_avg<<"\t" << temp_d<<"\t"<<gamma_temp<<endl;
 				}
-				
-				
-				
-				 
 			}
 			
 			// tu wykonujemy 1-krok VERLETEM

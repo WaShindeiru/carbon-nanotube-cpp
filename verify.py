@@ -14,6 +14,8 @@ def show_me():
 
     data = np.array(rows)
 
+    data = data[1:, :]
+
     # data = np.loadtxt('log.old')
 
     it    = data[:, 0]           # col 1: iteration
@@ -35,7 +37,7 @@ def show_me():
     ax.set_title(title)
     ax.set_xlabel(xlabel)
     # ax.set_xlim(300, None)
-    ax.set_ylim(0, 2000)
+    # ax.set_ylim(0, 2000)
     ax.legend()
     fig.savefig('temperature_average_500it.png', dpi=100)
     plt.close(fig)
@@ -63,7 +65,7 @@ def show_me():
     fig.savefig('etot_temporary.png', dpi=100)
     plt.close(fig)
 
-    ref_idx = 5  # placeholder: index of the reference iteration
+    ref_idx = 0  # placeholder: index of the reference iteration
 
     Etot = Etot - Etot[ref_idx]
 
