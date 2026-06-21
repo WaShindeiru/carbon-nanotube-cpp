@@ -1,0 +1,6 @@
+old/
+*.out
+*.dat
+*log*
+*.png
+.idea/
