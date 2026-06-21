@@ -202,7 +202,8 @@ public:
 				etot=ekin+vtot;
 				temp=2./3.*ekin/N;
 				
-				cout<<setw(10)<< t <<"\t";
+				cout<<setw(10)<< it <<"\t";
+				cout<<setw(20)<< t*data.time_unit <<"\t";
 				cout<<setw(12)<< temp*data.temperature_unit <<"\t";
 				cout<<setw(12)<< temp_avg*data.temperature_unit <<"\t";
 				cout<<setw(12)<< vtot <<"\t";
